@@ -1,96 +1,69 @@
 import streamlit as st
+from PIL import Image
 import tensorflow as tf
 from tensorflow.keras.preprocessing.sequence import pad_sequences
+import numpy as np
 import joblib
 import os
-import numpy as np
-import plotly.graph_objects as go
 
-# ====== Paths (relative) ======
+# ======== Load model and tokenizer ========
 MODEL_PATH = "models/sentiment_lstm_model.h5"
 TOKENIZER_PATH = "models/tokenizer.pkl"
 
-# ====== Load model and tokenizer ======
-@st.cache_resource
-def load_model():
-    return tf.keras.models.load_model(MODEL_PATH)
+# Verify files exist
+if not os.path.exists(MODEL_PATH):
+    st.error(f"❌ Model not found: {MODEL_PATH}")
+    st.stop()
+if not os.path.exists(TOKENIZER_PATH):
+    st.error(f"❌ Tokenizer not found: {TOKENIZER_PATH}")
+    st.stop()
 
-@st.cache_resource
-def load_tokenizer():
-    return joblib.load(TOKENIZER_PATH)
+# Load model and tokenizer
+model = tf.keras.models.load_model(MODEL_PATH)
+tokenizer = joblib.load(TOKENIZER_PATH)
+max_len = 100  # adapt based on preprocessing
 
-model = load_model()
-tokenizer = load_tokenizer()
-max_len = 100
+# ======== Streamlit Layout ========
+st.set_page_config(page_title="Daridja Sentiment Analyzer", page_icon="🧠")
 
-# ====== Page setup ======
-st.set_page_config(page_title="Daridja Sentiment Analyzer", layout="wide")
+# --- ✅ Cover image ---
+cover = Image.open("daridja_sentiment_couvertur.png")
+st.image(cover, use_column_width=True)
+
+# --- Title and description ---
 st.title("🧠 Daridja Sentiment Analyzer")
-st.write("Analyse le sentiment d'un commentaire écrit en Daridja.")
+st.write("Analyze the sentiment of comments written in **Daridja 🇩🇿** using a deep learning LSTM model.")
 
-# ====== Input ======
-text_input = st.text_area("Écris ton commentaire en Daridja...", height=150)
+# ======== Input Area ========
+st.subheader("📝 Enter your text in Daridja:")
+user_text = st.text_area("Write here...", height=150)
 
-# ====== Predict button ======
-if st.button("Prédire") and text_input.strip():
-    # Preprocessing
-    seq = tokenizer.texts_to_sequences([text_input])
-    padded = pad_sequences(seq, maxlen=max_len, padding='post', truncating='post')
-
-    # Predict
-    preds = model.predict(padded, verbose=0)
-    arr = np.asarray(preds).ravel()
-
-    if arr.size == 1:
-        p_pos = float(arr[0])
-        p_neg = 1.0 - p_pos
-    elif arr.size >= 2:
-        p_neg = float(arr[0])
-        p_pos = float(arr[1])
+if st.button("🔍 Analyze Sentiment"):
+    if not user_text.strip():
+        st.warning("⚠️ Please enter some text before analyzing.")
     else:
-        p_pos, p_neg = 0.0, 0.0
+        # Preprocess text
+        seq = tokenizer.texts_to_sequences([user_text])
+        padded = pad_sequences(seq, maxlen=max_len, padding='post', truncating='post')
 
-    predicted = "Positive" if p_pos >= p_neg else "Negative"
-    st.subheader(f"🧾 Sentiment prédit : {predicted}")
-    st.write(f"Confiance : Positive = {p_pos*100:.2f}%, Negative = {p_neg*100:.2f}%")
+        # Prediction
+        preds = model.predict(padded)
+        arr = np.asarray(preds).ravel()
 
-    # ====== Bar chart ======
-    bar_chart = go.Figure(go.Bar(
-        x=['Négatif', 'Positif'],
-        y=[p_neg, p_pos],
-        marker_color=['#dc3545', '#17a2b8']
-    ))
-    bar_chart.update_layout(
-        title='Distribution des Sentiments',
-        xaxis_title='Sentiment',
-        yaxis_title='Probabilité',
-        yaxis=dict(range=[0, 1]),
-        height=400,
-        margin=dict(l=40, r=40, t=40, b=40)
-    )
+        # Handle sigmoid or softmax outputs
+        if arr.size == 1:
+            p_pos = float(arr[0])
+            p_neg = 1.0 - p_pos
+        else:
+            p_neg = float(arr[0])
+            p_pos = float(arr[1])
 
-    # ====== Pie chart ======
-    pie_chart = go.Figure(go.Pie(
-        labels=['Négatif', 'Positif'],
-        values=[p_neg, p_pos],
-        hole=0.3,
-        marker_colors=['#dc3545', '#17a2b8']
-    ))
-    pie_chart.update_layout(
-        title='Proportion des Sentiments',
-        height=400,
-        margin=dict(l=40, r=40, t=40, b=40)
-    )
+        predicted = "Positive 😊" if p_pos >= p_neg else "Negative 😠"
 
-    # Display charts side by side
-    col1, col2 = st.columns(2)
-    col1.plotly_chart(bar_chart, use_container_width=True)
-    col2.plotly_chart(pie_chart, use_container_width=True)
+        # Display results
+        st.success(f"**Predicted Sentiment:** {predicted}")
+        st.write(f"Confidence — Positive: `{p_pos*100:.2f}%`, Negative: `{p_neg*100:.2f}%`")
 
-# ====== Sidebar instructions ======
-st.sidebar.title("ℹ️ Instructions")
-st.sidebar.write("""
-1. Écris ton commentaire en Daridja dans la zone de texte.  
-2. Clique sur **Prédire** pour analyser le sentiment.  
-3. Visualise la distribution et la proportion des sentiments.  
-""")
+# ======== Footer ========
+st.markdown("---")
+st.markdown("Made with ❤️ by **Djihad Rouis** — LSTM Model for Daridja 🇩🇿")
