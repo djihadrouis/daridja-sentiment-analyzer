@@ -1,4 +1,4 @@
-\# 🧠 Daridja Sentiment Analyzer
+🧠 Daridja Sentiment Analyzer
 
 
 
